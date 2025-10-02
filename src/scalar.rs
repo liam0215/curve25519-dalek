@@ -147,6 +147,7 @@ use core::ops::Neg;
 use core::ops::{Add, AddAssign};
 use core::ops::{Mul, MulAssign};
 use core::ops::{Sub, SubAssign};
+use std::boxed::Box;
 
 #[allow(unused_imports)]
 use prelude::*;
@@ -255,8 +256,39 @@ impl Scalar {
 }
 
 #[no_mangle]
-pub extern "C" fn scalar_from_bits(bytes: [u8; 32]) -> Scalar {
-    Scalar::from_bits(bytes)
+pub extern "C" fn scalar_new_from_bits(bytes_ptr: *const u8) -> *mut Scalar {
+    if bytes_ptr.is_null() {
+        return core::ptr::null_mut();
+    }
+    let input = unsafe { core::slice::from_raw_parts(bytes_ptr, 32) };
+    let mut in_arr = [0u8; 32];
+    in_arr.copy_from_slice(input);
+
+    let boxed = Box::new(Scalar::from_bits(in_arr));
+    Box::into_raw(boxed)
+}
+
+#[no_mangle]
+pub extern "C" fn scalar_free(ptr: *mut Scalar) {
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(ptr));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn scalar_to_bytes(ptr: *const Scalar, out_bytes: *mut u8) -> i32 {
+    if ptr.is_null() || out_bytes.is_null() {
+        return -1;
+    }
+    let s = unsafe { &*ptr };
+    let bytes = s.to_bytes();
+    unsafe {
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), out_bytes, 32);
+    }
+    0
 }
 
 impl Debug for Scalar {

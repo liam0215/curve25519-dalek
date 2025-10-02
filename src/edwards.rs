@@ -99,6 +99,9 @@ use core::iter::Sum;
 use core::ops::{Add, Neg, Sub};
 use core::ops::{AddAssign, SubAssign};
 use core::ops::{Mul, MulAssign};
+use core::ptr;
+use core::slice;
+use std::boxed::Box;
 
 use subtle::Choice;
 use subtle::ConditionallyNegatable;
@@ -332,21 +335,91 @@ pub struct EdwardsPoint {
     pub T: FieldElement,
 }
 
+// -------------------------------
+// Helpers
+// -------------------------------
+
+#[inline]
+fn read32(src: *const u8) -> Option<[u8; 32]> {
+    if src.is_null() {
+        return None;
+    }
+    let s = unsafe { slice::from_raw_parts(src, 32) };
+    let mut out = [0u8; 32];
+    out.copy_from_slice(s);
+    Some(out)
+}
+
+#[inline]
+fn write32(dst: *mut u8, bytes: &[u8; 32]) -> i32 {
+    if dst.is_null() {
+        return -1;
+    }
+    unsafe { ptr::copy_nonoverlapping(bytes.as_ptr(), dst, 32) };
+    0
+}
+
+/// Multiply point * scalar and return a NEW point.
+/// Returns null if either pointer is null.
 #[no_mangle]
-pub extern "C" fn multiply_edwards_point_by_scalar(
-    point: &EdwardsPoint,
-    scalar: &Scalar,
-) -> EdwardsPoint {
-    point * scalar
+pub extern "C" fn edwards_point_mul_new(
+    point: *const EdwardsPoint,
+    scalar: *const Scalar,
+) -> *mut EdwardsPoint {
+    if point.is_null() || scalar.is_null() {
+        return ptr::null_mut();
+    }
+    let p = unsafe { &*point };
+    let s = unsafe { &*scalar };
+    Box::into_raw(Box::new(*p * *s))
 }
 
 #[no_mangle]
-pub extern "C" fn edwards_point_from_x_y_bytes(x: &[u8; 32], y: &[u8; 32]) -> EdwardsPoint {
-    let X = FieldElement::from_bytes(x);
-    let Y = FieldElement::from_bytes(y);
+pub extern "C" fn edwards_point_free(p: *mut EdwardsPoint) {
+    if p.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(p));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn edwards_point_new_from_xy(x32: *const u8, y32: *const u8) -> *mut EdwardsPoint {
+    let xb = match read32(x32) {
+        Some(b) => b,
+        None => return ptr::null_mut(),
+    };
+    let yb = match read32(y32) {
+        Some(b) => b,
+        None => return ptr::null_mut(),
+    };
+
+    let X = FieldElement::from_bytes(&xb);
+    let Y = FieldElement::from_bytes(&yb);
+
     let Z = FieldElement::one();
-    let T = &X * &Y;
-    EdwardsPoint { X, Y, Z, T }
+    let YY = Y.square();
+    let u = &YY - &Z; // u =  y²-1
+    let v = &(&YY * &constants::EDWARDS_D) + &Z; // v = dy²+1
+    let (is_valid_y_coord, X) = FieldElement::sqrt_ratio_i(&u, &v);
+
+    if is_valid_y_coord.unwrap_u8() != 1u8 {
+        return ptr::null_mut();
+    }
+
+    // Build compressed-Y using sign bit of X, then decompress to validate encoding.
+    let mut cy = yb;
+    if X.is_negative().unwrap_u8() == 1 {
+        cy[31] |= 0x80;
+    } else {
+        cy[31] &= 0x7F;
+    }
+
+    match CompressedEdwardsY(cy).decompress() {
+        Some(p) => Box::into_raw(Box::new(p)),
+        None => ptr::null_mut(),
+    }
 }
 
 // ------------------------------------------------------------------------
