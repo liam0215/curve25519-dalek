@@ -322,6 +322,7 @@ impl<'de> Deserialize<'de> for CompressedEdwardsY {
 // ------------------------------------------------------------------------
 
 /// An `EdwardsPoint` represents a point on the Edwards form of Curve25519.
+#[repr(C)]
 #[derive(Copy, Clone)]
 #[allow(missing_docs)]
 pub struct EdwardsPoint {
@@ -329,6 +330,23 @@ pub struct EdwardsPoint {
     pub Y: FieldElement,
     pub Z: FieldElement,
     pub T: FieldElement,
+}
+
+#[no_mangle]
+pub extern "C" fn multiply_edwards_point_by_scalar(
+    point: &EdwardsPoint,
+    scalar: &Scalar,
+) -> EdwardsPoint {
+    point * scalar
+}
+
+#[no_mangle]
+pub extern "C" fn edwards_point_from_x_y_bytes(x: &[u8; 32], y: &[u8; 32]) -> EdwardsPoint {
+    let X = FieldElement::from_bytes(x);
+    let Y = FieldElement::from_bytes(y);
+    let Z = FieldElement::one();
+    let T = &X * &Y;
+    EdwardsPoint { X, Y, Z, T }
 }
 
 // ------------------------------------------------------------------------

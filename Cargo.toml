@@ -20,6 +20,7 @@ exclude = [
     ".gitignore",
     ".travis.yml",
 ]
+crate-type = ["staticlib"]
 
 [package.metadata.docs.rs]
 # Disabled for now since this is borked; tracking https://github.com/rust-lang/docs.rs/issues/302
