@@ -20,7 +20,6 @@ exclude = [
     ".gitignore",
     ".travis.yml",
 ]
-crate-type = ["staticlib"]
 
 [package.metadata.docs.rs]
 # Disabled for now since this is borked; tracking https://github.com/rust-lang/docs.rs/issues/302
@@ -64,3 +63,7 @@ simd_backend = ["nightly", "u64_backend", "packed_simd"]
 # DEPRECATED: this is now an alias for `simd_backend` and may be removed
 # in some future release.
 avx2_backend = ["simd_backend"]
+
+[lib]
+name = "curve25519_dalek"
+crate-type = ["staticlib"]
