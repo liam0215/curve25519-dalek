@@ -359,19 +359,27 @@ fn write32(dst: *mut u8, bytes: &[u8; 32]) -> i32 {
     0
 }
 
-/// Multiply point * scalar and return a NEW point.
-/// Returns null if either pointer is null.
 #[no_mangle]
-pub extern "C" fn edwards_point_mul_new(
-    point: *const EdwardsPoint,
-    scalar: *const Scalar,
-) -> *mut EdwardsPoint {
-    if point.is_null() || scalar.is_null() {
-        return ptr::null_mut();
+pub extern "C" fn edwards_point_new_identity() -> *mut EdwardsPoint {
+    Box::into_raw(Box::new(EdwardsPoint::identity()))
+}
+
+#[no_mangle]
+pub extern "C" fn edwards_point_mul_into(
+    dst: *mut EdwardsPoint,
+    p: *const EdwardsPoint,
+    s: *const Scalar,
+) -> i32 {
+    if dst.is_null() || p.is_null() || s.is_null() {
+        return -1;
     }
-    let p = unsafe { &*point };
-    let s = unsafe { &*scalar };
-    Box::into_raw(Box::new(*p * *s))
+    // Load
+    let p_ref = unsafe { &*p };
+    let s_ref = unsafe { &*s };
+    // Compute into a temporary (so aliasing dst==p is safe), then assign
+    let r = *p_ref * *s_ref;
+    unsafe { ptr::write(dst, r) };
+    0
 }
 
 #[no_mangle]
