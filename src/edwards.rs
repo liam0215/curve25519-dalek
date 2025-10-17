@@ -383,6 +383,27 @@ pub extern "C" fn edwards_point_mul_into(
 }
 
 #[no_mangle]
+pub extern "C" fn edwards_point_double_scalar_mul_basepoint(
+    dst: *mut EdwardsPoint,
+    p: *const EdwardsPoint,
+    s: *const Scalar,
+    b: *const Scalar,
+) -> i32 {
+    if dst.is_null() || p.is_null() || s.is_null() || b.is_null() {
+        return -1;
+    }
+    // Load
+    let p_ref = unsafe { &*p };
+    let s_ref = unsafe { &*s };
+    let b_ref = unsafe { &*b };
+
+    // Compute into a temporary (so aliasing dst==p is safe), then assign
+    let r = EdwardsPoint::vartime_double_scalar_mul_basepoint(s_ref, p_ref, b_ref);
+    unsafe { ptr::write(dst, r) };
+    0
+}
+
+#[no_mangle]
 pub extern "C" fn edwards_point_free(p: *mut EdwardsPoint) {
     if p.is_null() {
         return;
