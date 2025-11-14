@@ -404,6 +404,77 @@ pub extern "C" fn edwards_point_double_scalar_mul_basepoint(
 }
 
 #[no_mangle]
+pub extern "C" fn edwards_point_add(
+    dst: *mut EdwardsPoint,
+    a_x: *const u8,
+    a_y: *const u8,
+    b_x: *const u8,
+    b_y: *const u8,
+) -> i32 {
+    let xa = match read32(a_x) {
+        Some(b) => b,
+        None => return -1,
+    };
+    let ya = match read32(a_y) {
+        Some(b) => b,
+        None => return -1,
+    };
+    let xb = match read32(b_x) {
+        Some(b) => b,
+        None => return -1,
+    };
+    let yb = match read32(b_y) {
+        Some(b) => b,
+        None => return -1,
+    };
+
+    let Xa = FieldElement::from_bytes(&xa);
+    let Ya = FieldElement::from_bytes(&ya);
+
+    let Z = FieldElement::one();
+    let YY = Ya.square();
+    let u = &YY - &Z; // u =  y²-1
+    let v = &(&YY * &constants::EDWARDS_D) + &Z; // v = dy²+1
+    let (is_valid_y_coord, X) = FieldElement::sqrt_ratio_i(&u, &v);
+
+    if is_valid_y_coord.unwrap_u8() != 1u8 {
+        return -1;
+    }
+
+    let point_a = EdwardsPoint {
+        X: Xa,
+        Y: Ya,
+        Z: Z,
+        T: &Xa * &Ya,
+    };
+
+    let Xb = FieldElement::from_bytes(&xb);
+    let Yb = FieldElement::from_bytes(&yb);
+
+    let Z = FieldElement::one();
+    let YY = Yb.square();
+    let u = &YY - &Z; // u =  y²-1
+    let v = &(&YY * &constants::EDWARDS_D) + &Z; // v = dy²+1
+    let (is_valid_y_coord, X) = FieldElement::sqrt_ratio_i(&u, &v);
+
+    if is_valid_y_coord.unwrap_u8() != 1u8 {
+        return -1;
+    }
+
+    let point_b = EdwardsPoint {
+        X: Xb,
+        Y: Yb,
+        Z: Z,
+        T: &Xb * &Yb,
+    };
+
+    let r = &point_a + &point_b;
+    // Compute into a temporary (so aliasing dst==p is safe), then assign
+    unsafe { ptr::write(dst, r) };
+    0
+}
+
+#[no_mangle]
 pub extern "C" fn edwards_point_free(p: *mut EdwardsPoint) {
     if p.is_null() {
         return;
